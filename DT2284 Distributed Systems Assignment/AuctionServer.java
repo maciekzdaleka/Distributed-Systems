@@ -1,4 +1,3 @@
-import com.sun.xml.internal.bind.v2.model.core.ID;
 
 import java.awt.*;
 import java.io.IOException;
@@ -27,9 +26,10 @@ public class AuctionServer implements Runnable
 	private int itemPrice; //local variable to store item price
 	private static int  i = 0; //int used for object indexing
 	private static Timer timer; // timer class for auction purposes
-	private static int itemsCount = 2; //keeping the track of the amount of items
+	private static int itemsCount = 5; //keeping the track of the amount of items
 	private int current_client = 0; //very important int which determines if the bid was placed or not
 	private int clientID; // int which stores client id
+	private int start_auction = 0; // checking if 2 clients are connected so the auction can start
 
 	public AuctionServer(int port)
 	{
@@ -77,9 +77,9 @@ public class AuctionServer implements Runnable
 	{
 		itemlist.add(new Items("Iphone 6s", "20" ));
 		itemlist.add(new Items("Samsung Galaxy s7", "20" ));
-		//itemlist.add(new Items("Mac Book Pro", "40" ));
-		//itemlist.add(new Items("Acer Aspire 5", "60" ));
-		//	itemlist.add(new Items("Go Pro hero 3", "20" ));
+		itemlist.add(new Items("Mac Book Pro", "40" ));
+		itemlist.add(new Items("Acer Aspire 5", "60" ));
+		itemlist.add(new Items("Go Pro hero 3", "20" ));
 	}
 	public void addItemsToAuction(int n) //function which adds new items to the auction
 	{
@@ -110,27 +110,31 @@ public class AuctionServer implements Runnable
 
 	public synchronized void broadcast(int ID, String input)
 	{
-		int clientbid = Integer.decode(input); //we are getting user input and converting into int
 		if (input.equals(".bye")) {
 			clients[findClient(ID)].send(".bye");
 			remove(ID);
 		}
-		else
+		else if(start_auction == 1) //checks if 2 clients are connected in order to start bidding
 		{
+			int clientbid = Integer.decode(input); //we are getting user input and converting into int
 			if (clientbid > itemPrice && clientbid > 0 && clientbid < 1000000000 && itemsCount > 0) //checking if the bid is bigger than the item price
 			{
-				itemPrice = clientbid;
-				for(int i=0;i<clientCount; i++)
-				{
-					clients[i].send("\nHighest bid for:  " + itemName + " is: " + itemPrice); //sending info to auctioneers whats the current highest bid
-				}
-				clients[findClient(ID)].send("\nYou have placed a new highest bid of: " + itemPrice + " for: " + itemName); //sends info to the bidder that he got the highest bid
 				for (int i = 0; i < clientCount; i++)
 				{
 					if(clients[i].getID() != ID)
 						System.out.println(ID + clientbid);
 					clientID = ID;// getting the id of the client who placed the bid
 				}
+				itemPrice = clientbid;
+
+				for(int i=0;i<clientCount; i++)
+				{
+					if(clients[i].getID() != clientID)
+					{
+						clients[i].send("\nHighest bid for:  " + itemName + " is: " + itemPrice + " Euro"); //sending info to auctioneers whats the current highest bid
+					}
+				}
+				clients[findClient(ID)].send("\nYou have placed a new highest bid of: " + itemPrice + " Euro" + " for: " + itemName + " Euro"); //sends info to the bidder that he got the highest bid
 				current_client = 1;
 				timer.cancel();// reset the timer
 				runTimer();//starts the timer again when new bid was placed
@@ -143,6 +147,10 @@ public class AuctionServer implements Runnable
 			{
 				clients[findClient(ID)].send("\nYou've placed either the same or lower bid for the " + itemName + " which is currently at the price of: " + itemPrice + " Euro");
 			}
+		}
+		else
+		{
+			clients[findClient(ID)].send("\nPlease wait for the start of the auction...");
 		}
 		notifyAll();
 	}
@@ -170,36 +178,29 @@ public class AuctionServer implements Runnable
 			notifyAll();
 		}
 	}
-	public void welcome() // displays message after user connects to the server
+	public void welcome(int ID) // displays message after user connects to the server
 	{
 		if(clientCount == 2 && itemsCount > 0) // message displayed when 2nd auctioneer join the server and items are currently on sale
 		{
 			for(int i=0;i<clientCount; i++)
 			{
-				clients[i].send("\nWelcome to the auction. Current item for sale is:  " + itemName + " at the price: " + itemPrice);
+				clients[i].send("\nWelcome to the auction. Current item for sale is:  " + itemName + " at the price: " + itemPrice + " Euro");
 			}
 			runTimer();//we start the auction
+			start_auction =1;
 		}
 		else if(clientCount >=3 && itemsCount > 0)// message displayed when another auctioneers connect to server
 		{												// the auction doesn't restarts
-			for(int i=0;i<clientCount; i++)
-			{
-				clients[i].send("\nWelcome to the auction. Current item for sale is:  " + itemName + " at the price: " + itemPrice);
-			}
+				clients[findClient(ID)].send("\nWelcome to the auction. Current item for sale is:  " + itemName + " at the price: " + itemPrice+ " Euro");
 		}
 		else if(clientCount == 1 && itemsCount > 0)// waiting for another client to connect to start the auction
 		{
-			for(int i=0;i<clientCount; i++)
-			{
-				clients[i].send("\nWelcome to the auction. Auction will start when we get another client! Please wait...");
-			}
+			clients[findClient(ID)].send("\nWelcome to the auction. Auction will start when we get another client! Please wait...");
+			start_auction = 0;
 		}
 		else if(clientCount >=1 && itemsCount < 1)// when client connects but there is no more items for the auction
 		{
-			for(int i=0;i<clientCount; i++)
-			{
-				clients[i].send("\nAuction is over now. Please come again sometime soon");
-			}
+				clients[findClient(ID)].send("\nAuction is over now. Please come again sometime soon");
 		}
 	}
 
@@ -214,7 +215,7 @@ public class AuctionServer implements Runnable
 				clients[clientCount].open();
 				clients[clientCount].start();
 				clientCount++;
-				welcome();//welcome message after client connects
+				welcome(clients[clientCount-1].getID());//welcome message after client connects passes the id of the user that connects
 			}
 			catch(IOException ioe){
 				System.out.println("Error opening thread: " + ioe);
@@ -242,7 +243,7 @@ public class AuctionServer implements Runnable
 						for (int i = 0; i < clientCount; i++)
 						{
 							clients[i].send( " \n----------------------------------------------------------------------");
-							clients[i].send("\nLast item for sale is:  " + itemName + "  at the price:  " + itemPrice);
+							clients[i].send("\nLast item for sale is:  " + itemName + "  at the price:  " + itemPrice+ " Euro");
 						}
 						timer.cancel();
 						runTimer();
@@ -259,7 +260,7 @@ public class AuctionServer implements Runnable
 						for (int i = 0; i < clientCount; i++)
 						{
 							clients[i].send( " \n----------------------------------------------------------------------");
-							clients[i].send("\nNext item for sale is:  " + itemName + "  at the price:  " + itemPrice);
+							clients[i].send("\nNext item for sale is:  " + itemName + "  at the price:  " + itemPrice + " Euro");
 						}
 						timer.cancel();// we cancel the timer and then start it again for 1 minute
 						runTimer();
@@ -270,9 +271,13 @@ public class AuctionServer implements Runnable
 					if(itemsCount == 2)//notifying auctioneers which item was sold, to who and for how much
 					{
 						Toolkit.getDefaultToolkit().beep();// 3rd beep noise notifying auctioneers that the
+						clients[findClient(clientID)].send( " \nYou have won "+ itemName + " at the price:  " + itemPrice+ " Euro");//informing the user that he won the auction for the item
 						for (int i = 0; i < clientCount; i++)
 						{
-							clients[i].send( " \n"+ itemName + "  Was sold to " + clientID +" at the price:  " + itemPrice);
+							if(clients[i].getID() != clientID)
+							{
+								clients[i].send(" \n" + itemName + "  Was sold to " + clientID + " at the price:  " + itemPrice + " Euro");
+							}
 							clients[i].send( " \n----------------------------------------------------------------------");
 						}
 						itemlist.remove(i);//remove the item from the list
@@ -280,7 +285,7 @@ public class AuctionServer implements Runnable
 						itemsCount--;//deducting the item count
 						for (int i = 0; i < clientCount; i++)
 						{
-							clients[i].send("\nLast item for sale is:  " + itemName + "  at the price:  " + itemPrice); // notifying auctioneers that last item on sale in this auction
+							clients[i].send("\nLast item for sale is:  " + itemName + "  at the price:  " + itemPrice+ " Euro"); // notifying auctioneers that last item on sale in this auction
 						}
 						timer.cancel();//reset the timer again
 						runTimer();
@@ -289,15 +294,20 @@ public class AuctionServer implements Runnable
 					{
 						itemsCount --;//deducting the item count
 						Toolkit.getDefaultToolkit().beep();
+						clients[findClient(clientID)].send( " \nYou have won "+ itemName + " at the price:  " + itemPrice+ " Euro");
 						for (int i = 0; i < clientCount; i++)
 						{
-							clients[i].send( "\n"+ itemName + "  Was sold to " + clientID +" at the price:  " + itemPrice);
+							if(clients[i].getID() != clientID)
+							{
+								clients[i].send(" \n" + itemName + "  Was sold to " + clientID + " at the price:  " + itemPrice + " Euro");
+							}
 							clients[i].send( " \n----------------------------------------------------------------------");
 						}
 						for (int i = 0; i < clientCount; i++)
 						{
 							clients[i].send("\n------We have reached to end of the auction! Thank you very much for your participation------"); //message at the end of the auction
 						}
+						start_auction = 0;
 						itemlist.remove(i);
 						timer.cancel();// cancels the timer as the auction is over
 
@@ -312,9 +322,13 @@ public class AuctionServer implements Runnable
 					else//message send to auctioneers when item was sold
 					{
 						Toolkit.getDefaultToolkit().beep();
+						clients[findClient(clientID)].send( " \nYou have won "+ itemName + " at the price:  " + itemPrice+ " Euro");
 						for (int i = 0; i < clientCount; i++)
 						{
-							clients[i].send( " \n"+ itemName + "  Was sold to " + clientID +" at the price:  " + itemPrice);
+							if(clients[i].getID() != clientID)
+							{
+								clients[i].send(" \n" + itemName + "  Was sold to " + clientID + " at the price:  " + itemPrice + " Euro");
+							}
 							clients[i].send( " \n----------------------------------------------------------------------");
 						}
 						itemlist.remove(i);//remove the item from the list
@@ -322,7 +336,7 @@ public class AuctionServer implements Runnable
 						itemsCount--;//deducting the item count
 						for (int i = 0; i < clientCount; i++)
 						{
-							clients[i].send("\nNext item for sale is:  " + itemName + "  at the price:  " + itemPrice);
+							clients[i].send("\nNext item for sale is:  " + itemName + "  at the price:  " + itemPrice+ " Euro");
 						}
 						timer.cancel();
 						runTimer();

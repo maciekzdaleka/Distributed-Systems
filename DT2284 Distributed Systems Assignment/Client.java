@@ -37,10 +37,24 @@ public class Client implements Runnable
 	   {
 		   while (thread != null){
 			 try {
-				//String message = chatName + " > " + console.readLine();
 				String message = console.readLine();
-				streamOut.writeUTF(message);
-	            streamOut.flush();
+				 if(message.equals(".bye")) // checking if client want to leave the auction
+				 {
+					 streamOut.writeUTF(message);
+					 streamOut.flush();
+				 }
+				 else
+				 {
+					 if (isValid(message))//checking if the input is valid
+					 {
+						 streamOut.writeUTF(message);
+						 streamOut.flush();
+					 }
+					 else
+					 {
+						 System.out.println("\nPlease enter valid bid!!!");
+					 }
+				 }
 	         }
 	         catch(IOException ioe)
 	         {  System.out.println("Sending error: " + ioe.getMessage());
@@ -48,6 +62,18 @@ public class Client implements Runnable
 	         }
 	      }
 	   }
+
+	private boolean isValid(String message)//checking if the input is a number
+	{
+		for(int i=0;i<message.length();i++)
+		{
+			if(!Character.isDigit(message.charAt(i)))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 
 	   public void handle(String msg)
 	   {  if (msg.equals(".bye"))
