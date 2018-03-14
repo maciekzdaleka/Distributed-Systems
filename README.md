@@ -21,6 +21,12 @@ Server Specification
 Extra Functionality
 
 -Sound during bidding process
+
 -Informing auctioneers when last item on the auction is on the auction
+
 -No one can bid anymore when auction is over
+
 -Auction starts when there are two auctioneers connected to the server
+
+
+
